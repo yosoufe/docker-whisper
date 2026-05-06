@@ -95,6 +95,17 @@ curl http://your_server_ip:9000/v1/audio/transcriptions \
 {"text": "Your transcribed text appears here."}
 ```
 
+**Tip:** Need a sample audio file to test? Download this English speech sample (WAV, MIT License) from the [Azure Samples](https://github.com/Azure-Samples/cognitive-services-speech-sdk) repository:
+
+```bash
+curl -L -o sample_speech.wav \
+    "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
+
+curl http://your_server_ip:9000/v1/audio/transcriptions \
+    -F file=@sample_speech.wav \
+    -F model=whisper-1
+```
+
 Alternatively, you may [set up Whisper without Docker](https://github.com/hwdsl2/whisper-install). To learn more about how to use this image, read the sections below.
 
 ## Requirements

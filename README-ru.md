@@ -95,6 +95,17 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 {"text": "Здесь отображается распознанный текст."}
 ```
 
+**Совет:** Нужен образец аудиофайла для тестирования? Можно использовать этот образец английской речи (WAV, лицензия MIT) из репозитория [Azure Samples](https://github.com/Azure-Samples/cognitive-services-speech-sdk):
+
+```bash
+curl -L -o sample_speech.wav \
+    "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
+
+curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -F file=@sample_speech.wav \
+    -F model=whisper-1
+```
+
 В качестве альтернативы вы можете [настроить Whisper без Docker](https://github.com/hwdsl2/whisper-install/blob/main/README-ru.md). Чтобы узнать больше об использовании этого образа, ознакомьтесь с разделами ниже.
 
 ## Требования

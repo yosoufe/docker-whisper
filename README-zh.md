@@ -95,6 +95,17 @@ curl http://您的服务器IP:9000/v1/audio/transcriptions \
 {"text": "转录的文字内容显示在这里。"}
 ```
 
+**提示：** 需要示例音频文件进行测试？可以使用来自 [Azure Samples](https://github.com/Azure-Samples/cognitive-services-speech-sdk) 仓库的英语语音示例（WAV 格式，MIT 许可证）：
+
+```bash
+curl -L -o sample_speech.wav \
+    "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
+
+curl http://您的服务器IP:9000/v1/audio/transcriptions \
+    -F file=@sample_speech.wav \
+    -F model=whisper-1
+```
+
 另外，你也可以在不使用 Docker 的情况下[安装 Whisper](https://github.com/hwdsl2/whisper-install/blob/main/README-zh.md)。如需了解更多关于此镜像的使用方法，请阅读以下各节。
 
 ## 系统要求
