@@ -331,17 +331,19 @@ curl http://您的服务器IP:9000/v1/audio/transcriptions \
     -F stream=true
 ```
 
-**SSE 响应**（每个段落一个事件，最后一个为 `done` 事件）：
+**SSE 响应**（使用 [OpenAI 流式转录协议](https://developers.openai.com/api/docs/guides/speech-to-text#streaming)）：
 
 ```
-data: {"type":"segment","start":0.0,"end":2.4,"text":"您好，最近怎么样？"}
+data: {"type":"transcript.text.delta","delta":"您好，最近怎么样？"}
 
-data: {"type":"segment","start":2.8,"end":5.1,"text":"我很好，谢谢。"}
+data: {"type":"transcript.text.delta","delta":" 我很好，谢谢。"}
 
-data: {"type":"done","text":"您好，最近怎么样？ 我很好，谢谢。"}
+data: {"type":"transcript.text.done","text":"您好，最近怎么样？ 我很好，谢谢。"}
+
+data: [DONE]
 ```
 
-上传后第一个段落通常在 1–3 秒内到达。每个 `segment` 事件包含以秒为单位的 `start`/`end` 时间戳。最后的 `done` 事件包含与标准 `json` 响应等效的完整转录文本。
+上传后第一个增量文本通常在 1–3 秒内到达。每个 `transcript.text.delta` 事件包含刚解码的段落的增量文本。最后的 `transcript.text.done` 事件包含与标准 `json` 响应等效的完整转录文本。
 
 <details>
 <summary><strong>示例 — 通过浏览器 <code>fetch</code> 进行流式传输</strong></summary>
@@ -369,9 +371,11 @@ while (true) {
   buffer = frames.pop(); // keep any incomplete trailing frame
   for (const frame of frames) {
     if (!frame.startsWith("data: ")) continue;
-    const event = JSON.parse(frame.slice(6));
-    if (event.type === "segment") console.log(event.text);
-    if (event.type === "done") console.log("Full text:", event.text);
+    const payload = frame.slice(6);
+    if (payload.startsWith("[DONE]")) break;
+    const event = JSON.parse(payload);
+    if (event.type === "transcript.text.delta") console.log(event.delta);
+    if (event.type === "transcript.text.done") console.log("Full text:", event.text);
   }
 }
 ```
