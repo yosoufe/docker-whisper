@@ -145,7 +145,8 @@ jobs:
           stream_output=$(curl -sN http://127.0.0.1:9000/v1/audio/transcriptions \
             "${whisper_curl_args[@]}" \
             -F file=@/tmp/test.wav -F model=whisper-1 -F stream=true)
-          echo "$stream_output" | grep -q '"type"'
+          echo "$stream_output" | grep -q '"transcript.text.done"'
+          echo "$stream_output" | grep -q '\[DONE\]'
 
           docker restart "$TEST_ID"
 
