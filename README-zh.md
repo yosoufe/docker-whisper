@@ -224,6 +224,7 @@ services:
 
 volumes:
   whisper-data:
+    name: whisper-data
 ```
 
 **注：** 如需面向公网部署，强烈建议使用[反向代理](#使用反向代理)启用 HTTPS。此时请将 `docker-compose.yml` 中的 `"9000:9000/tcp"` 改为 `"127.0.0.1:9000:9000/tcp"`，以防止未加密端口被直接访问。当服务器可从公网访问时，请在 `env` 文件中设置 `WHISPER_API_KEY`。
@@ -263,6 +264,7 @@ services:
 
 volumes:
   whisper-data:
+    name: whisper-data
 ```
 
 </details>

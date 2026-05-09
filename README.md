@@ -224,6 +224,7 @@ services:
 
 volumes:
   whisper-data:
+    name: whisper-data
 ```
 
 **Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also change `"9000:9000/tcp"` to `"127.0.0.1:9000:9000/tcp"` in `docker-compose.yml`, to prevent direct access to the unencrypted port. Set `WHISPER_API_KEY` in your `env` file when the server is accessible from the public internet.
@@ -263,6 +264,7 @@ services:
 
 volumes:
   whisper-data:
+    name: whisper-data
 ```
 
 </details>
