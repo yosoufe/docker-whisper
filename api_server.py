@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import List, Optional
 
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -292,7 +292,7 @@ async def _handle_audio(
     response_format: str,
     temperature: float,
     stream: Optional[str],
-    word_timestamps: Optional[str],
+    timestamp_granularities: Optional[List[str]] = None,
 ):
     """
     Shared implementation for transcription and translation endpoints.
@@ -313,9 +313,10 @@ async def _handle_audio(
     # Using Optional[str] instead of bool avoids Pydantic version-dependent coercion differences.
     stream_flag: bool = stream is not None and stream.strip().lower() == "true"
 
-    # Resolve word_timestamps: per-request param > WHISPER_WORD_TIMESTAMPS env var > False
+    # Resolve word_timestamps:
+    #   timestamp_granularities (spec-compliant) > WHISPER_WORD_TIMESTAMPS env var > False
     wt_flag: bool
-    if word_timestamps is not None and word_timestamps.strip().lower() == "true":
+    if timestamp_granularities and "word" in timestamp_granularities:
         wt_flag = True
     else:
         wt_flag = _word_timestamps
@@ -419,6 +420,7 @@ async def _handle_audio(
 
     if response_format == "verbose_json":
         seg_list = []
+        all_words = []
         for idx, seg in enumerate(segments):
             seg_dict = {
                 "id": idx,
@@ -433,7 +435,7 @@ async def _handle_audio(
                 "no_speech_prob": round(seg.no_speech_prob, 4),
             }
             if wt_flag and seg.words:
-                seg_dict["words"] = [
+                all_words.extend(
                     {
                         "word": w.word.strip(),
                         "start": round(w.start, 3),
@@ -441,9 +443,9 @@ async def _handle_audio(
                         "probability": round(w.probability, 4),
                     }
                     for w in seg.words
-                ]
+                )
             seg_list.append(seg_dict)
-        return JSONResponse({
+        resp = {
             "task": task,
             "language": info.language,
             "language_probability": round(info.language_probability, 4),
@@ -451,7 +453,10 @@ async def _handle_audio(
             "duration_after_vad": round(info.duration_after_vad, 3),
             "text": full_text,
             "segments": seg_list,
-        })
+        }
+        if wt_flag:
+            resp["words"] = all_words
+        return JSONResponse(resp)
 
     # Default: json — matches OpenAI's minimal response shape
     return JSONResponse({"text": full_text})
@@ -489,12 +494,13 @@ async def transcribe(
             "response_format is ignored when stream=true."
         ),
     ),
-    word_timestamps: Optional[str] = Form(
+    timestamp_granularities: Optional[List[str]] = Form(
         default=None,
+        alias="timestamp_granularities[]",
         description=(
-            "Extract word-level timestamps. When 'true', verbose_json output "
-            "includes a 'words' array in each segment with per-word start/end "
-            "times and confidence. Default: false (or WHISPER_WORD_TIMESTAMPS env var)."
+            "The timestamp granularities to populate for this transcription. "
+            "response_format must be verbose_json. Supported values: 'word', 'segment'. "
+            "Default: ['segment']."
         ),
     ),
     _auth: None = Depends(_verify_api_key),
@@ -524,7 +530,7 @@ async def transcribe(
         response_format=response_format,
         temperature=temperature,
         stream=stream,
-        word_timestamps=word_timestamps,
+        timestamp_granularities=timestamp_granularities,
     )
 
 
@@ -560,14 +566,6 @@ async def translate(
             "response_format is ignored when stream=true."
         ),
     ),
-    word_timestamps: Optional[str] = Form(
-        default=None,
-        description=(
-            "Extract word-level timestamps. When 'true', verbose_json output "
-            "includes a 'words' array in each segment with per-word start/end "
-            "times and confidence. Default: false (or WHISPER_WORD_TIMESTAMPS env var)."
-        ),
-    ),
     _auth: None = Depends(_verify_api_key),
 ):
     """
@@ -591,7 +589,6 @@ async def translate(
         response_format=response_format,
         temperature=temperature,
         stream=stream,
-        word_timestamps=word_timestamps,
     )
 
 
