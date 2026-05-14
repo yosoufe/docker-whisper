@@ -167,7 +167,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `WHISPER_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
 | `WHISPER_BEAM` | Beam size for transcription decoding. Higher values may improve accuracy at the cost of speed. Use `1` for fastest (greedy) decoding. | `5` |
 | `WHISPER_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached models. | *(not set)* |
-| `WHISPER_WORD_TIMESTAMPS` | When set to `true`, enables word-level timestamps globally for all requests. Each segment in `verbose_json` output will include a `words` array with per-word timing and confidence. Can also be enabled per-request. | *(not set)* |
+| `WHISPER_WORD_TIMESTAMPS` | When set to `true`, enables word-level timestamps globally for all requests. The `verbose_json` output will include a top-level `words` array with per-word timing and confidence. Can also be enabled per-request via `timestamp_granularities[]=word`. | *(not set)* |
 
 **Note:** In your `env` file, you may enclose values in single quotes, e.g. `VAR='value'`. Do not add spaces around `=`. If you change `WHISPER_PORT`, update the `-p` flag in the `docker run` command accordingly.
 
@@ -298,7 +298,7 @@ Content-Type: multipart/form-data
 | `response_format` | string | — | Output format. Default: `json`. See [response formats](#response-formats). Ignored when `stream=true`. |
 | `temperature` | float | — | Sampling temperature (0–1). Default: `0`. |
 | `stream` | boolean | — | Enable SSE streaming. When `true`, segments are returned as `text/event-stream` events as they are decoded. Default: `false`. |
-| `word_timestamps` | boolean | — | Extract word-level timestamps. When `true`, `verbose_json` output includes a `words` array in each segment. Default: `false` (or `WHISPER_WORD_TIMESTAMPS` env var). |
+| `timestamp_granularities[]` | array | — | Timestamp granularities to populate. Values: `word`, `segment`. When `word` is included, `verbose_json` output includes a top-level `words` array. Default: `["segment"]`. |
 
 **Example:**
 
@@ -413,10 +413,10 @@ curl http://your_server_ip:9000/v1/audio/transcriptions \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
-    -F word_timestamps=true
+    -F "timestamp_granularities[]=word"
 ```
 
-When `word_timestamps=true`, each segment in the `verbose_json` response includes a `words` array:
+When `timestamp_granularities[]` includes `word`, the `verbose_json` response includes a top-level `words` array:
 
 ```json
 {

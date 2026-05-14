@@ -167,7 +167,7 @@ docker image tag quay.io/hwdsl2/whisper-server hwdsl2/whisper-server
 | `WHISPER_LOG_LEVEL` | 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR`、`CRITICAL`。 | `INFO` |
 | `WHISPER_BEAM` | 转录解码的 beam 大小。较大的值可能以速度换取精度。使用 `1` 可获得最快的贪婪解码。 | `5` |
 | `WHISPER_LOCAL_ONLY` | 设为任意非空值（如 `true`）时，禁止所有 HuggingFace 模型下载。适用于预先缓存模型的离线或隔离网络部署。 | *（未设置）* |
-| `WHISPER_WORD_TIMESTAMPS` | 设为 `true` 时，全局启用词级时间戳。`verbose_json` 输出中每个片段将包含 `words` 数组，含每个词的起止时间和置信度。也可按请求启用。 | *（未设置）* |
+| `WHISPER_WORD_TIMESTAMPS` | 设为 `true` 时，全局启用词级时间戳。`verbose_json` 输出将包含顶层 `words` 数组，含每个词的起止时间和置信度。也可通过 `timestamp_granularities[]=word` 按请求启用。 | *（未设置）* |
 
 **注：** 在 `env` 文件中，值可用单引号括起，例如 `VAR='value'`。`=` 两侧不要有空格。如更改 `WHISPER_PORT`，请相应更新 `docker run` 命令中的 `-p` 参数。
 
@@ -298,7 +298,7 @@ Content-Type: multipart/form-data
 | `response_format` | 字符串 | — | 输出格式，默认为 `json`。请参阅[响应格式](#响应格式)。`stream=true` 时忽略此参数。 |
 | `temperature` | 浮点数 | — | 采样温度（0–1），默认为 `0`。 |
 | `stream` | 布尔值 | — | 启用 SSE 流式传输。为 `true` 时，段落将在解码时以 `text/event-stream` 事件形式返回。默认为 `false`。 |
-| `word_timestamps` | 布尔值 | — | 提取词级时间戳。为 `true` 时，`verbose_json` 输出中每个片段包含 `words` 数组。默认为 `false`（或 `WHISPER_WORD_TIMESTAMPS` 环境变量）。 |
+| `timestamp_granularities[]` | 数组 | — | 时间戳粒度。值：`word`、`segment`。包含 `word` 时，`verbose_json` 输出包含顶层 `words` 数组。默认：`["segment"]`。 |
 
 **示例：**
 
@@ -413,10 +413,10 @@ curl http://您的服务器IP:9000/v1/audio/transcriptions \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
-    -F word_timestamps=true
+    -F "timestamp_granularities[]=word"
 ```
 
-当 `word_timestamps=true` 时，`verbose_json` 响应中每个片段包含 `words` 数组：
+当 `timestamp_granularities[]` 包含 `word` 时，`verbose_json` 响应包含顶层 `words` 数组：
 
 ```json
 {
