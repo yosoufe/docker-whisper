@@ -62,6 +62,8 @@ WHISPER_BEAM=$(nospaces "$WHISPER_BEAM")
 WHISPER_BEAM=$(noquotes "$WHISPER_BEAM")
 WHISPER_LOCAL_ONLY=$(nospaces "$WHISPER_LOCAL_ONLY")
 WHISPER_LOCAL_ONLY=$(noquotes "$WHISPER_LOCAL_ONLY")
+WHISPER_WORD_TIMESTAMPS=$(nospaces "$WHISPER_WORD_TIMESTAMPS")
+WHISPER_WORD_TIMESTAMPS=$(noquotes "$WHISPER_WORD_TIMESTAMPS")
 
 # Save whether the user explicitly set WHISPER_COMPUTE_TYPE (used below
 # to auto-select float16 for CUDA when no explicit type was provided).
@@ -156,6 +158,7 @@ export WHISPER_API_KEY
 export WHISPER_LOG_LEVEL
 export WHISPER_BEAM
 export WHISPER_LOCAL_ONLY
+export WHISPER_WORD_TIMESTAMPS
 # Point faster-whisper / HuggingFace Hub at the persistent Docker volume
 export HF_HOME=/var/lib/whisper
 

@@ -150,6 +150,7 @@ do_show_info() {
   echo
   echo "API endpoints:"
   echo "  POST http://${SERVER_ADDR}:${WHISPER_PORT}/v1/audio/transcriptions"
+  echo "  POST http://${SERVER_ADDR}:${WHISPER_PORT}/v1/audio/translations"
   echo "  GET  http://${SERVER_ADDR}:${WHISPER_PORT}/v1/models"
   echo "  GET  http://${SERVER_ADDR}:${WHISPER_PORT}/docs     (interactive docs)"
   echo
