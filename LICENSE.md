@@ -50,3 +50,8 @@ This Docker image incorporates the following third-party software:
 - Licensed under the GNU Lesser General Public License v2.1 or later (LGPL 2.1+)
   and the GNU General Public License v2 or later (GPL 2+) for certain components.
 - https://ffmpeg.org/legal.html
+
+**sherpa-onnx** (speaker diarization via ONNX Runtime)
+- Copyright (C) 2022-2024 Xiaomi Corporation
+- Licensed under the Apache License, Version 2.0
+- https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE
