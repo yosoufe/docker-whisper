@@ -17,6 +17,7 @@
 - 支援所有主流音訊格式（mp3、m4a、wav、webm、ogg、flac 及 ffmpeg 支援的所有格式）
 - 多種回應格式：JSON、純文字、詳細 JSON、SRT 字幕、WebVTT 字幕
 - 串流轉錄 — 加入 `stream=true` 參數，即可透過 SSE 在解碼時逐段接收轉錄結果，無需等待整個檔案處理完成
+- 說話人分離 — 識別每個片段中的說話人（可選，透過 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 實現）
 - NVIDIA GPU (CUDA) 加速推論（使用 `:cuda` 映像標籤）
 - 離線/隔離網路模式 — 使用預先快取的模型無需網際網路存取 (`WHISPER_LOCAL_ONLY`)
 - 透過 [GitHub Actions](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml) 自動建置和發布
@@ -168,6 +169,10 @@ docker image tag quay.io/hwdsl2/whisper-server hwdsl2/whisper-server
 | `WHISPER_BEAM` | 轉錄解碼的 beam 大小。較大的值可能以速度換取精確度。使用 `1` 可獲得最快的貪婪解碼。 | `5` |
 | `WHISPER_LOCAL_ONLY` | 設為任意非空值（如 `true`）時，停用所有 HuggingFace 模型下載。適用於預先快取模型的離線或隔離網路部署。 | *（未設定）* |
 | `WHISPER_WORD_TIMESTAMPS` | 設為 `true` 時，全域啟用詞級時間戳。`verbose_json` 輸出將包含頂層 `words` 陣列，含每個詞的起止時間和置信度。也可透過 `timestamp_granularities[]=word` 按請求啟用。 | *（未設定）* |
+| `WHISPER_DIARIZATION` | 設為 `true` 啟用說話人分離，識別每個片段中的說話人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（約 45 MB，首次使用時自動下載）。不支援串流模式。 | *（未設定）* |
+| `WHISPER_DIARIZE_NUM_SPEAKERS` | 說話人確切數量（如已知）。提高聚類準確性。設為 `-1` 或留空表示自動偵測。 | `-1` |
+| `WHISPER_DIARIZE_MAX_SPEAKERS` | 最大偵測說話人數。僅在 `NUM_SPEAKERS` 未設定時使用。 | `-1` |
+| `WHISPER_DIARIZE_THRESHOLD` | 聚類閾值。值越小偵測到的說話人越多，值越大偵測到的越少。 | `0.5` |
 
 **注：** 在 `env` 檔案中，值可用單引號括起，例如 `VAR='value'`。`=` 兩側不要有空格。如更改 `WHISPER_PORT`，請相應更新 `docker run` 指令中的 `-p` 參數。
 
@@ -625,6 +630,60 @@ Whisper (STT)、Embeddings、LiteLLM、Kokoro (TTS)、Ollama (LLM)、Docling 和
 | **[Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-zh-Hant.md)** | 將文件（PDF、DOCX 等）轉換為結構化文字/Markdown | `5001` |
 
 **另請參閱：[Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack)** — 一條命令即可部署完整技術堆疊，提供現成的設定和流水線範例。
+
+## 說話人分離
+
+說話人分離功能識別每個轉錄片段中*誰在說話*。基於 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 使用匯出為 ONNX 格式的 pyannote segmentation-3.0 模型。
+
+**啟用說話人分離：**
+
+```bash
+# 在 whisper.env 中：
+WHISPER_DIARIZATION=true
+```
+
+ONNX 模型（共約 45 MB）在首次使用時自動下載並快取到 `/var/lib/whisper` 資料卷。預先下載：
+
+```bash
+docker exec whisper whisper_manage --downloaddiarize
+```
+
+**啟用說話人分離後的輸出：**
+
+`verbose_json` 在每個片段中新增 `speaker` 欄位：
+
+```json
+{
+  "segments": [
+    {"id": 0, "start": 1.0, "end": 3.5, "text": "我們下週發布吧。", "speaker": "SPEAKER_00"},
+    {"id": 1, "start": 4.0, "end": 6.2, "text": "我覺得 QA 還需要兩天。", "speaker": "SPEAKER_01"}
+  ]
+}
+```
+
+`srt` 和 `vtt` 在文字前加上說話人標籤：
+
+```
+1
+00:00:01,000 --> 00:00:03,500
+[SPEAKER_00] 我們下週發布吧。
+
+2
+00:00:04,000 --> 00:00:06,200
+[SPEAKER_01] 我覺得 QA 還需要兩天。
+```
+
+`text` 格式在說話人變化時顯示標籤：
+
+```
+[SPEAKER_00] 我們下週發布吧。
+[SPEAKER_01] 我覺得 QA 還需要兩天。
+```
+
+**注意事項：**
+- 說話人分離需要完整音訊分析，**不支援串流模式**（`stream=true`）。兩者同時啟用時，說話人分離會被靜默跳過。
+- 如果已知確切說話人數量，設定 `WHISPER_DIARIZE_NUM_SPEAKERS` 可提高準確性。
+- 說話人分離在轉錄完成後執行，會增加與音訊時長成正比的少量處理時間。
 
 ## 技術細節
 

@@ -17,6 +17,7 @@ Docker image to run a [Whisper](https://github.com/openai/whisper) speech-to-tex
 - All major audio formats supported (mp3, m4a, wav, webm, ogg, flac, and all ffmpeg formats)
 - Multiple response formats: JSON, plain text, verbose JSON, SRT subtitles, WebVTT subtitles
 - Streaming transcription — add `stream=true` to receive segments via SSE as they are decoded, with no waiting for the full file
+- Speaker diarization — identify who is speaking in each segment (optional, via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx))
 - NVIDIA GPU (CUDA) acceleration for faster inference (`:cuda` image tag)
 - Offline/air-gapped mode — run without internet access using pre-cached models (`WHISPER_LOCAL_ONLY`)
 - Automatically built and published via [GitHub Actions](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml)
@@ -168,6 +169,10 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `WHISPER_BEAM` | Beam size for transcription decoding. Higher values may improve accuracy at the cost of speed. Use `1` for fastest (greedy) decoding. | `5` |
 | `WHISPER_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached models. | *(not set)* |
 | `WHISPER_WORD_TIMESTAMPS` | When set to `true`, enables word-level timestamps globally for all requests. The `verbose_json` output will include a top-level `words` array with per-word timing and confidence. Can also be enabled per-request via `timestamp_granularities[]=word`. | *(not set)* |
+| `WHISPER_DIARIZATION` | Set to `true` to enable speaker diarization. Identifies who is speaking in each segment. Uses [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) with pyannote segmentation-3.0 ONNX models (~45 MB, auto-downloaded on first use). Not supported in streaming mode. | *(not set)* |
+| `WHISPER_DIARIZE_NUM_SPEAKERS` | Exact number of speakers (if known). Improves clustering accuracy. Set to `-1` or leave unset for auto-detection. | `-1` |
+| `WHISPER_DIARIZE_MAX_SPEAKERS` | Maximum number of speakers to detect. Only used when `NUM_SPEAKERS` is unset. | `-1` |
+| `WHISPER_DIARIZE_THRESHOLD` | Clustering threshold. Lower = more speakers detected, higher = fewer. | `0.5` |
 
 **Note:** In your `env` file, you may enclose values in single quotes, e.g. `VAR='value'`. Do not add spaces around `=`. If you change `WHISPER_PORT`, update the `-p` flag in the `docker run` command accordingly.
 
@@ -625,6 +630,60 @@ The Whisper (STT), Embeddings, LiteLLM, Kokoro (TTS), Ollama (LLM), Docling, and
 | **[Docling](https://github.com/hwdsl2/docker-docling)** | Converts documents (PDF, DOCX, etc.) to structured text/Markdown | `5001` |
 
 **See also: [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack)** — deploy the full stack with a single command, with ready-made configurations and pipeline examples.
+
+## Speaker diarization
+
+Speaker diarization identifies *who* is speaking in each transcribed segment. It is powered by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) using the pyannote segmentation-3.0 model exported to ONNX format.
+
+**Enable diarization:**
+
+```bash
+# In your whisper.env:
+WHISPER_DIARIZATION=true
+```
+
+ONNX models (~45 MB total) are automatically downloaded on first use and cached in the `/var/lib/whisper` volume. To pre-download them:
+
+```bash
+docker exec whisper whisper_manage --downloaddiarize
+```
+
+**Output with diarization enabled:**
+
+`verbose_json` adds a `speaker` field to each segment:
+
+```json
+{
+  "segments": [
+    {"id": 0, "start": 1.0, "end": 3.5, "text": "We should launch next week.", "speaker": "SPEAKER_00"},
+    {"id": 1, "start": 4.0, "end": 6.2, "text": "I think QA needs two more days.", "speaker": "SPEAKER_01"}
+  ]
+}
+```
+
+`srt` and `vtt` prepend the speaker label:
+
+```
+1
+00:00:01,000 --> 00:00:03,500
+[SPEAKER_00] We should launch next week.
+
+2
+00:00:04,000 --> 00:00:06,200
+[SPEAKER_01] I think QA needs two more days.
+```
+
+`text` format shows the speaker label on speaker changes:
+
+```
+[SPEAKER_00] We should launch next week.
+[SPEAKER_01] I think QA needs two more days.
+```
+
+**Notes:**
+- Diarization requires full audio analysis and is **not supported in streaming mode** (`stream=true`). If both are enabled, diarization is silently skipped.
+- Set `WHISPER_DIARIZE_NUM_SPEAKERS` if you know the exact number of speakers for better accuracy.
+- The diarization pipeline runs after transcription, adding a small amount of processing time proportional to audio duration.
 
 ## Technical details
 
