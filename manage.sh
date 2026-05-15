@@ -32,6 +32,7 @@ Options:
   --showinfo                           show server info (model, endpoint, API docs)
   --listmodels                         list available Whisper model names and sizes
   --downloadmodel <model>              pre-download a model to the cache volume
+  --downloaddiarize                    pre-download diarization ONNX models
 
   -h, --help                           show this help message and exit
 
@@ -48,6 +49,7 @@ Examples:
   docker exec whisper whisper_manage --listmodels
   docker exec whisper whisper_manage --downloadmodel large-v3
   docker exec whisper whisper_manage --downloadmodel large-v3-turbo
+  docker exec whisper whisper_manage --downloaddiarize
 
 EOF
   exit "$exit_code"
@@ -95,6 +97,7 @@ parse_args() {
   show_info=0
   list_models=0
   download_model=0
+  download_diarize=0
   model_to_download=""
 
   while [ "$#" -gt 0 ]; do
@@ -113,6 +116,10 @@ parse_args() {
         shift
         [ "$#" -gt 0 ] && shift
         ;;
+      --downloaddiarize)
+        download_diarize=1
+        shift
+        ;;
       -h|--help)
         show_usage "" 0
         ;;
@@ -125,7 +132,7 @@ parse_args() {
 
 check_args() {
   local action_count
-  action_count=$((show_info + list_models + download_model))
+  action_count=$((show_info + list_models + download_model + download_diarize))
 
   if [ "$action_count" -eq 0 ]; then
     show_usage
@@ -250,6 +257,44 @@ PYEOF
   echo
 }
 
+do_download_diarize() {
+  echo
+  echo "Downloading diarization ONNX models to /var/lib/whisper..."
+  echo "  - Segmentation model (~5 MB)"
+  echo "  - Speaker embedding model (~40 MB)"
+  echo
+
+  local cache_dir="/var/lib/whisper"
+  local seg_dir="${cache_dir}/sherpa-onnx-pyannote-segmentation-3-0"
+  local seg_model="${seg_dir}/model.onnx"
+  local emb_model="${cache_dir}/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+
+  if [ ! -f "$seg_model" ]; then
+    echo "  Downloading segmentation model..."
+    curl -fSL --retry 3 --retry-delay 2 -o "${cache_dir}/seg.tar.bz2" \
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+    tar xjf "${cache_dir}/seg.tar.bz2" -C "$cache_dir"
+    rm -f "${cache_dir}/seg.tar.bz2"
+    echo "  Segmentation model ready."
+  else
+    echo "  Segmentation model already exists."
+  fi
+
+  if [ ! -f "$emb_model" ]; then
+    echo "  Downloading embedding model..."
+    curl -fSL --retry 3 --retry-delay 2 -o "$emb_model" \
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+    echo "  Embedding model ready."
+  else
+    echo "  Embedding model already exists."
+  fi
+
+  echo
+  echo "Diarization models downloaded successfully."
+  echo "To enable diarization, set WHISPER_DIARIZATION=true in your env file."
+  echo
+}
+
 check_container
 load_config
 parse_args "$@"
@@ -268,5 +313,10 @@ fi
 
 if [ "$download_model" = 1 ]; then
   do_download_model
+  exit 0
+fi
+
+if [ "$download_diarize" = 1 ]; then
+  do_download_diarize
   exit 0
 fi

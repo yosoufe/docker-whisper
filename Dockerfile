@@ -17,13 +17,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # curl is used by run.sh for the public-IP lookup and the health-check poll.
 RUN set -x \
     && apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl bzip2 \
     && python3 -m venv /opt/venv \
     && pip install --no-cache-dir \
          faster-whisper \
          fastapi \
          "uvicorn[standard]" \
          python-multipart \
+         sherpa-onnx \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && find /opt/venv -name '*.pyi' -delete \
@@ -33,6 +34,7 @@ RUN set -x \
 COPY ./run.sh /opt/src/run.sh
 COPY ./manage.sh /opt/src/manage.sh
 COPY ./api_server.py /opt/src/api_server.py
+COPY ./diarizer.py /opt/src/diarizer.py
 COPY ./LICENSE.md /opt/src/LICENSE.md
 RUN chmod 755 /opt/src/run.sh /opt/src/manage.sh \
     && ln -s /opt/src/manage.sh /usr/local/bin/whisper_manage

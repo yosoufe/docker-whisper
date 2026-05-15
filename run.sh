@@ -64,6 +64,14 @@ WHISPER_LOCAL_ONLY=$(nospaces "$WHISPER_LOCAL_ONLY")
 WHISPER_LOCAL_ONLY=$(noquotes "$WHISPER_LOCAL_ONLY")
 WHISPER_WORD_TIMESTAMPS=$(nospaces "$WHISPER_WORD_TIMESTAMPS")
 WHISPER_WORD_TIMESTAMPS=$(noquotes "$WHISPER_WORD_TIMESTAMPS")
+WHISPER_DIARIZATION=$(nospaces "$WHISPER_DIARIZATION")
+WHISPER_DIARIZATION=$(noquotes "$WHISPER_DIARIZATION")
+WHISPER_DIARIZE_NUM_SPEAKERS=$(nospaces "$WHISPER_DIARIZE_NUM_SPEAKERS")
+WHISPER_DIARIZE_NUM_SPEAKERS=$(noquotes "$WHISPER_DIARIZE_NUM_SPEAKERS")
+WHISPER_DIARIZE_MAX_SPEAKERS=$(nospaces "$WHISPER_DIARIZE_MAX_SPEAKERS")
+WHISPER_DIARIZE_MAX_SPEAKERS=$(noquotes "$WHISPER_DIARIZE_MAX_SPEAKERS")
+WHISPER_DIARIZE_THRESHOLD=$(nospaces "$WHISPER_DIARIZE_THRESHOLD")
+WHISPER_DIARIZE_THRESHOLD=$(noquotes "$WHISPER_DIARIZE_THRESHOLD")
 
 # Save whether the user explicitly set WHISPER_COMPUTE_TYPE (used below
 # to auto-select float16 for CUDA when no explicit type was provided).
@@ -159,6 +167,10 @@ export WHISPER_LOG_LEVEL
 export WHISPER_BEAM
 export WHISPER_LOCAL_ONLY
 export WHISPER_WORD_TIMESTAMPS
+export WHISPER_DIARIZATION
+export WHISPER_DIARIZE_NUM_SPEAKERS
+export WHISPER_DIARIZE_MAX_SPEAKERS
+export WHISPER_DIARIZE_THRESHOLD
 # Point faster-whisper / HuggingFace Hub at the persistent Docker volume
 export HF_HOME=/var/lib/whisper
 
@@ -186,6 +198,9 @@ echo "  Port:     $WHISPER_PORT"
 echo "  Beam:     $WHISPER_BEAM"
 if [ -n "$WHISPER_LOCAL_ONLY" ]; then
   echo "  Mode:     local-only (no HuggingFace downloads)"
+fi
+if [ "$(echo "$WHISPER_DIARIZATION" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+  echo "  Diarize:  enabled"
 fi
 
 if [ -z "$WHISPER_LOCAL_ONLY" ]; then

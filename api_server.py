@@ -46,10 +46,36 @@ _model = None       # WhisperModel instance
 _model_name = None  # name as loaded (e.g. "base")
 _beam_size = 5      # beam size used for transcription
 _word_timestamps = False  # default for word-level timestamps
+_diarization_enabled = False  # set via WHISPER_DIARIZATION=true
 
 # Serialise all inference calls (batch and streaming) so that CTranslate2 is
 # never called concurrently from multiple threads.
 _inference_lock = threading.Lock()
+
+
+def _load_diarizer() -> None:
+    """Conditionally load the sherpa-onnx diarization pipeline."""
+    global _diarization_enabled
+    if os.environ.get("WHISPER_DIARIZATION", "").strip().lower() != "true":
+        return
+    try:
+        import diarizer
+        cache_dir = os.environ.get("HF_HOME", "/var/lib/whisper")
+        num_speakers = int(os.environ.get("WHISPER_DIARIZE_NUM_SPEAKERS", "-1"))
+        max_speakers = int(os.environ.get("WHISPER_DIARIZE_MAX_SPEAKERS", "-1"))
+        threshold = float(os.environ.get("WHISPER_DIARIZE_THRESHOLD", "0.5"))
+        logger.info("Loading diarization pipeline...")
+        diarizer.load(
+            cache_dir=cache_dir,
+            num_speakers=num_speakers,
+            max_speakers=max_speakers,
+            cluster_threshold=threshold,
+        )
+        _diarization_enabled = True
+        logger.info("Diarization enabled.")
+    except Exception as exc:
+        logger.warning("Failed to load diarizer (diarization disabled): %s", exc)
+        _diarization_enabled = False
 
 
 def _load_model() -> None:
@@ -87,6 +113,7 @@ def _load_model() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     _load_model()
+    _load_diarizer()
     yield
 
 
@@ -144,23 +171,33 @@ def _fmt_ts(seconds: float, fmt: str) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
 
 
-def _to_srt(segments) -> str:
+def _to_srt(segments, speaker_map=None) -> str:
     lines = []
     for i, seg in enumerate(segments, start=1):
+        text = seg.text.strip() if hasattr(seg, "text") else seg.get("text", "").strip()
+        start = seg.start if hasattr(seg, "start") else seg["start"]
+        end = seg.end if hasattr(seg, "end") else seg["end"]
+        speaker = speaker_map.get(i - 1) if speaker_map else None
+        prefix = f"[{speaker}] " if speaker else ""
         lines.append(
             f"{i}\n"
-            f"{_fmt_ts(seg.start, 'srt')} --> {_fmt_ts(seg.end, 'srt')}\n"
-            f"{seg.text.strip()}\n"
+            f"{_fmt_ts(start, 'srt')} --> {_fmt_ts(end, 'srt')}\n"
+            f"{prefix}{text}\n"
         )
     return "\n".join(lines)
 
 
-def _to_vtt(segments) -> str:
+def _to_vtt(segments, speaker_map=None) -> str:
     lines = ["WEBVTT\n"]
-    for seg in segments:
+    for i, seg in enumerate(segments):
+        text = seg.text.strip() if hasattr(seg, "text") else seg.get("text", "").strip()
+        start = seg.start if hasattr(seg, "start") else seg["start"]
+        end = seg.end if hasattr(seg, "end") else seg["end"]
+        speaker = speaker_map.get(i) if speaker_map else None
+        prefix = f"[{speaker}] " if speaker else ""
         lines.append(
-            f"{_fmt_ts(seg.start, 'vtt')} --> {_fmt_ts(seg.end, 'vtt')}\n"
-            f"{seg.text.strip()}\n"
+            f"{_fmt_ts(start, 'vtt')} --> {_fmt_ts(end, 'vtt')}\n"
+            f"{prefix}{text}\n"
         )
     return "\n".join(lines)
 
@@ -379,28 +416,49 @@ async def _handle_audio(
         )
 
     # ------------------------------------------------------------------
-    # Batch path (original behaviour — unchanged)
+    # Batch path
     # ------------------------------------------------------------------
     try:
-        with _inference_lock:
-            segments_gen, info = _model.transcribe(
-                tmp_path,
-                language=lang,
-                task=task,
-                initial_prompt=prompt or None,
-                temperature=temperature,
-                beam_size=_beam_size,
-                word_timestamps=wt_flag,
-                vad_filter=True,
-            )
-            segments = list(segments_gen)  # consume the generator before the temp file is removed
+        try:
+            with _inference_lock:
+                segments_gen, info = _model.transcribe(
+                    tmp_path,
+                    language=lang,
+                    task=task,
+                    initial_prompt=prompt or None,
+                    temperature=temperature,
+                    beam_size=_beam_size,
+                    word_timestamps=wt_flag,
+                    vad_filter=True,
+                )
+                segments = list(segments_gen)  # consume the generator before the temp file is removed
 
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Transcription failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Transcription failed: %s", exc)
+            raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+
+        # ------------------------------------------------------------------
+        # Diarization (optional post-processing)
+        # ------------------------------------------------------------------
+        speaker_map = None  # {segment_index: speaker_label}
+        if _diarization_enabled:
+            try:
+                import diarizer
+                turns = diarizer.diarize(tmp_path)
+                # Build lightweight segment dicts for alignment
+                seg_dicts = [
+                    {"start": seg.start, "end": seg.end, "text": seg.text.strip()}
+                    for seg in segments
+                ]
+                diarizer.assign_speakers(seg_dicts, turns)
+                speaker_map = {i: d["speaker"] for i, d in enumerate(seg_dicts)}
+            except Exception as exc:
+                logger.warning("Diarization failed (returning without speakers): %s", exc)
+
     finally:
+        # Clean up temp file after both transcription and diarization
         if tmp_path:
             try:
                 os.unlink(tmp_path)
@@ -410,13 +468,25 @@ async def _handle_audio(
     full_text = " ".join(seg.text.strip() for seg in segments).strip()
 
     if response_format == "text":
+        if speaker_map:
+            lines = []
+            prev_speaker = None
+            for i, seg in enumerate(segments):
+                spk = speaker_map.get(i, "SPEAKER_00")
+                text = seg.text.strip()
+                if spk != prev_speaker:
+                    lines.append(f"[{spk}] {text}")
+                    prev_speaker = spk
+                else:
+                    lines.append(text)
+            return PlainTextResponse("\n".join(lines))
         return PlainTextResponse(full_text)
 
     if response_format == "srt":
-        return PlainTextResponse(_to_srt(segments), media_type="text/plain")
+        return PlainTextResponse(_to_srt(segments, speaker_map), media_type="text/plain")
 
     if response_format == "vtt":
-        return PlainTextResponse(_to_vtt(segments), media_type="text/plain")
+        return PlainTextResponse(_to_vtt(segments, speaker_map), media_type="text/plain")
 
     if response_format == "verbose_json":
         seg_list = []
@@ -434,6 +504,8 @@ async def _handle_audio(
                 "compression_ratio": round(seg.compression_ratio, 4),
                 "no_speech_prob": round(seg.no_speech_prob, 4),
             }
+            if speaker_map:
+                seg_dict["speaker"] = speaker_map.get(idx, "SPEAKER_00")
             if wt_flag and seg.words:
                 all_words.extend(
                     {
