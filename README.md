@@ -33,6 +33,10 @@ Docker image to run a [Whisper](https://github.com/openai/whisper) speech-to-tex
 
 **Tip:** Whisper, Kokoro, Embeddings, LiteLLM, Ollama, Docling, and MCP Gateway can be [used together](#using-with-other-ai-services) to build a complete, self-hosted AI stack on your own server.
 
+## Community
+
+- Discussions and showcases: [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/)
+
 ## When to use Whisper vs. WhisperLive
 
 | | **docker-whisper** | [docker-whisper-live](https://github.com/hwdsl2/docker-whisper-live) |
