@@ -86,6 +86,9 @@ _USER_COMPUTE_TYPE="$WHISPER_COMPUTE_TYPE"
 [ -z "$WHISPER_THREADS" ]      && WHISPER_THREADS=2
 [ -z "$WHISPER_LOG_LEVEL" ]    && WHISPER_LOG_LEVEL=INFO
 [ -z "$WHISPER_BEAM" ]         && WHISPER_BEAM=5
+[ -z "$WHISPER_DIARIZE_NUM_SPEAKERS" ] && WHISPER_DIARIZE_NUM_SPEAKERS=-1
+[ -z "$WHISPER_DIARIZE_MAX_SPEAKERS" ] && WHISPER_DIARIZE_MAX_SPEAKERS=-1
+[ -z "$WHISPER_DIARIZE_THRESHOLD" ]    && WHISPER_DIARIZE_THRESHOLD=0.5
 
 # Validate port
 if ! check_port "$WHISPER_PORT"; then
@@ -138,6 +141,19 @@ fi
 # Validate beam size
 if ! printf '%s' "$WHISPER_BEAM" | grep -Eq '^[1-9][0-9]*$'; then
   exiterr "WHISPER_BEAM must be a positive integer (e.g. 1, 5)."
+fi
+
+# Validate diarization speaker counts (-1 for auto-detect, or a positive integer)
+if ! printf '%s' "$WHISPER_DIARIZE_NUM_SPEAKERS" | grep -Eq '^(-1|[1-9][0-9]*)$'; then
+  exiterr "WHISPER_DIARIZE_NUM_SPEAKERS must be -1 (auto) or a positive integer."
+fi
+if ! printf '%s' "$WHISPER_DIARIZE_MAX_SPEAKERS" | grep -Eq '^(-1|[1-9][0-9]*)$'; then
+  exiterr "WHISPER_DIARIZE_MAX_SPEAKERS must be -1 (auto) or a positive integer."
+fi
+
+# Validate diarization clustering threshold (a non-negative number)
+if ! printf '%s' "$WHISPER_DIARIZE_THRESHOLD" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+  exiterr "WHISPER_DIARIZE_THRESHOLD must be a non-negative number (e.g. 0.5)."
 fi
 
 mkdir -p /var/lib/whisper
